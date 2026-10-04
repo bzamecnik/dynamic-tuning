@@ -93,3 +93,6 @@ dmypy.json
 
 # PyPI configuration file
 .pypirc
+
+# Project outputs (wav, png, ...)
+outputs/
