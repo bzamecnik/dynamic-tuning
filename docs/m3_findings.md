@@ -1,8 +1,8 @@
 # M3 findings: dissonance of fixed tunings
 
 Reproduce with `uv run python scripts/m3_dissonance.py` (plots and full tables in `outputs/m3/`).
-Default setup: 12-key progression (cycle of fourths, 4 voices), 8 harmonic partials with
-amplitudes 1/k, Sethares 1993 model, inter-note roughness only (pairs of partials within
+Setup of the first run below: 12-key progression (cycle of fourths, 4 voices), 8 harmonic
+partials with amplitudes 1/k, Sethares 1993 model, inter-note roughness only (pairs of partials within
 one note don't depend on the tuning), duration-weighted means.
 
 ## Observations
@@ -50,3 +50,23 @@ one note don't depend on the tuning), duration-weighted means.
   which comes from the syntonic comma (D–A). Key-relative JI is the smoothest overall.
 - The corpus edition writes the sustain out only for the lower voices (upper arpeggio
   notes are 16ths), so roughness drops to zero between some chord tones.
+
+## Model comparison (added later)
+
+Three pair models are available (`dynamic_tuning.dissonance.MODELS`): Sethares 1993,
+Vassilakis 2001 (now the default) and Hutchinson & Knopoff 1978 (normalized by the sum of
+squared amplitudes, as in Harrison & Pearce's `dycon`). See `dissonance_curves.png`:
+
+- `dissonant` 0.1.1 computes Vassilakis' amplitude-fluctuation degree from the amplitude
+  of the upper partial instead of `A_min` (paper: `Y = 2 A_min / (A_min + A_max)`). Our
+  implementation follows the paper. It changes the results noticeably, since the upper
+  partial is often the louder one (e.g. the fundamental of an upper note against a high
+  partial of a lower note).
+- Vassilakis has the sharpest minima at just ratios. Its tuning ranking is stable across
+  timbres: key-relative JI is −4.5 % vs 12-TET for 8–16 partials and any rolloff. It also
+  rates ii7 in key-relative JI smoother than 12-TET, unlike Sethares; viiø7 stays rougher.
+- Hutchinson & Knopoff has a wider, smoother curve. Key-relative JI is −2 to −4 %, and fixed
+  JI (C) and Pythagorean come out rougher than 12-TET on average.
+- With 4 partials, Sethares and Vassilakis see almost no benefit from any tuning.
+- None of the models penalizes slowly beating, nearly coinciding partials much. That would
+  need an extra "beating" term (a possible custom model).

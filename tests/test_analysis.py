@@ -65,12 +65,13 @@ def test_major_triad_smoother_in_ji(profiles) -> None:
 def test_normalized_dissonance(score) -> None:
     spec = resolve(score, EQUAL, Timbre(n_partials=4))
     seg = spec.segments[0]
-    raw = segment_dissonance(seg)
-    norm = segment_dissonance(seg, normalize=True)
+    m = "sethares1993"  # amplitude-bilinear model
+    raw = segment_dissonance(seg, m)
+    norm = segment_dissonance(seg, m, normalize=True)
     assert 0 < norm < 1
     doubled = type(seg)(seg.start, seg.end, seg.notes, seg.freqs, 2 * seg.amps)
-    assert segment_dissonance(doubled) == pytest.approx(4 * raw)
-    assert segment_dissonance(doubled, normalize=True) == pytest.approx(norm)
+    assert segment_dissonance(doubled, m) == pytest.approx(4 * raw)
+    assert segment_dissonance(doubled, m, normalize=True) == pytest.approx(norm)
 
 
 def test_summary_table(profiles) -> None:

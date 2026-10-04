@@ -22,6 +22,7 @@ from dynamic_tuning.analysis import (
     save,
     summary_table,
 )
+from dynamic_tuning.dissonance import DEFAULT_MODEL, MODELS, roughness
 from dynamic_tuning.pieces import PIECES, load_corpus
 from dynamic_tuning.progression import key_cycle, progression_score
 from dynamic_tuning.score import Score, key_name
@@ -121,7 +122,7 @@ def key_dependence(score: Score, timbre: Timbre, model: str) -> None:
 def sensitivity(score: Score) -> str:
     """Mean roughness relative to 12-TET over timbre parameters and models."""
     rows = []
-    for model in ["sethares1993", "vassilakis2001"]:
+    for model in MODELS:
         for n_partials in [4, 8, 16]:
             for rolloff in [0.5, 1.0, 2.0]:
                 profiles = profiles_for(score, Timbre(n_partials, rolloff), model)
@@ -144,18 +145,42 @@ def sensitivity(score: Score) -> str:
     for (i, j), v in np.ndenumerate(data):
         ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=7)
     ax.set_xticks(range(len(names)), names, rotation=30, ha="right")
-    ax.set_yticks(range(len(rows)), [f"{m[:4]} n={n} r={r}" for m, n, r, _ in rows])
+    ax.set_yticks(range(len(rows)), [f"{m[:5]} n={n} r={r}" for m, n, r, _ in rows])
     fig.colorbar(im, ax=ax, label=f"log2 ratio to {REF}")
     ax.set_title("Sensitivity of the tuning comparison to timbre and model")
     save(fig, str(OUT / "sensitivity.png"))
     return "## Sensitivity\n\n" + "\n".join(lines)
 
 
+def dissonance_curves(timbre: Timbre) -> None:
+    """Classic dissonance curves: two harmonic tones (C4 + interval), one panel per model."""
+    ratios = np.linspace(1.0, 2.1, 1101)
+    base = 261.63
+    fig, axes = plt.subplots(len(MODELS), 1, figsize=(12, 3 * len(MODELS)), sharex=True)
+    for ax, model in zip(axes, MODELS, strict=True):
+        curve = [
+            roughness(*timbre.partials(np.array([base, base * r])), model, include_self=False)
+            for r in ratios
+        ]
+        ax.plot(ratios, curve, color="k", linewidth=1)
+        for cents in range(0, 1300, 100):
+            ax.axvline(2 ** (cents / 1200), color="C0", alpha=0.3, linewidth=0.8)
+        for num, den in [(6, 5), (5, 4), (4, 3), (3, 2), (5, 3), (2, 1)]:
+            ax.axvline(num / den, color="C3", alpha=0.5, linestyle="--", linewidth=0.8)
+            ax.text(num / den, 1.0, f"{num}/{den}", transform=ax.get_xaxis_transform(),
+                    ha="center", va="bottom", fontsize=8, color="C3")  # fmt: skip
+        ax.set_ylabel(model)
+    axes[-1].set_xlabel("frequency ratio (blue: 12-TET, red dashed: just)")
+    fig.suptitle(f"Dissonance curves, C4 + interval ({timbre.n_partials} partials, "
+                 f"rolloff {timbre.rolloff})")  # fmt: skip
+    save(fig, str(OUT / "dissonance_curves.png"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n-partials", type=int, default=8)
     parser.add_argument("--rolloff", type=float, default=1.0)
-    parser.add_argument("--model", default="sethares1993")
+    parser.add_argument("--model", default=DEFAULT_MODEL, choices=list(MODELS))
     parser.add_argument("--pieces", nargs="*", default=list(PIECES), help="music21 corpus names")
     parser.add_argument("--no-sensitivity", action="store_true")
     args = parser.parse_args()
@@ -165,6 +190,7 @@ def main() -> None:
     score = progression_score()
 
     report = ["# M3: dissonance of fixed tunings\n"]
+    dissonance_curves(timbre)
     report.append(analyze(score, "progression", timbre, args.model, chord_labels=True))
     key_dependence(score, timbre, args.model)
     pair_heatmaps(score, timbre, args.model, "C: V7")
