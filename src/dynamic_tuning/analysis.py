@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -109,6 +109,20 @@ def dissonance_profile(
     )
 
 
+def relative_profiles(profiles: dict[str, Profile], reference: str) -> dict[str, Profile]:
+    """Per-segment ratio to a reference profile (all profiles must share the segments).
+
+    Segments with zero reference roughness (e.g. a single sounding note) get ratio 1.
+    The reference itself is left out.
+    """
+    ref = profiles[reference].value
+    return {
+        name: replace(p, value=np.divide(p.value, ref, out=np.ones_like(ref), where=ref > 0))
+        for name, p in profiles.items()
+        if name != reference
+    }
+
+
 def summary_table(profiles: dict[str, Profile], by: str = "figure", fmt: str = ".3f") -> str:
     """Markdown table: rows = groups (in order of first appearance), columns = profiles."""
     means = {name: p.group_means(by) for name, p in profiles.items()}
@@ -192,6 +206,50 @@ def plot_profiles(
     if title:
         ax.set_title(title, pad=18)
     ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), fontsize=8)
+    return ax
+
+
+def plot_comparison(
+    profiles: dict[str, Profile],
+    reference: str,
+    title: str = "",
+    chord_labels: bool = False,
+    colors: dict[str, str] | None = None,
+) -> Figure:
+    """Two panels: absolute profiles, and profiles relative to the reference."""
+    fig, axes = plt.subplots(2, 1, figsize=(18, 9), sharex=True)
+    plot_profiles(profiles, ax=axes[0], title=title, colors=colors)
+    rel = relative_profiles(profiles, reference)
+    plot_profiles(rel, ax=axes[1], chord_labels=chord_labels, colors=colors)
+    axes[1].axhline(1.0, color="k", linewidth=0.8)
+    axes[1].set_ylabel(f"roughness / {reference}")
+    return fig
+
+
+def plot_intonation(
+    note_cents: dict[int, list[tuple[float, float]]],
+    score: Score,
+    ax: Axes | None = None,
+    title: str = "",
+) -> Axes:
+    """Intonation offset (cents) of each note over time, colored by voice."""
+    if ax is None:
+        _, ax = plt.subplots(figsize=(18, 4))
+    voices = score.voices
+    for note_idx, points in note_cents.items():
+        note = score.notes[note_idx]
+        times = [t for t, _ in points] + [note.end]
+        cents = [c for _, c in points]
+        color = f"C{voices.index(note.voice) % 10}"
+        ax.stairs(cents, times, baseline=None, color=color, linewidth=1.2)
+    for i, v in enumerate(voices):
+        ax.plot([], [], color=f"C{i % 10}", label=f"voice {v}")
+    ax.axhline(0, color="k", linewidth=0.6)
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("cents vs base tuning")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), fontsize=8)
+    if title:
+        ax.set_title(title)
     return ax
 
 

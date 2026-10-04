@@ -79,9 +79,10 @@ def _chain(
 
 EQUAL = Tuning("12-TET", tuple(100.0 * i for i in range(12)))
 
-# 5-limit just intonation: major/minor thirds 5/4, 6/5; minor seventh 16/9 (as in V7).
+# 5-limit just intonation: major/minor thirds 5/4, 6/5; minor seventh 9/5 (a pure minor
+# third above the fifth, so that the minor seventh chord on any degree has pure fifths).
 JUST_RATIOS = [
-    1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 16 / 9, 15 / 8,
+    1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 9 / 5, 15 / 8,
 ]  # fmt: skip
 JUST_C = from_ratios("JI (C)", JUST_RATIOS)
 JUST_KEY = from_ratios("JI (key)", JUST_RATIOS, key_relative=True)

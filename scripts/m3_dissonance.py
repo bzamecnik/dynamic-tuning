@@ -16,9 +16,9 @@ import numpy as np
 from dynamic_tuning.analysis import (
     Profile,
     dissonance_profile,
+    plot_comparison,
     plot_group_heatmap,
     plot_pair_heatmap,
-    plot_profiles,
     save,
     summary_table,
 )
@@ -41,37 +41,12 @@ def profiles_for(score: Score, timbre: Timbre, model: str) -> dict[str, Profile]
     }
 
 
-def relative(profiles: dict[str, Profile]) -> dict[str, Profile]:
-    """Per-segment ratio to the reference tuning (segments are identical across tunings).
-
-    Segments with zero reference roughness (e.g. a single sounding note) get ratio 1.
-    """
-    ref = profiles[REF].value
-    ones = np.ones_like(ref)
-    return {
-        name: Profile(
-            name,
-            p.start,
-            p.end,
-            np.divide(p.value, ref, out=ones.copy(), where=ref > 0),
-            p.chords,
-            p.qualities,
-            p.keys,
-        )
-        for name, p in profiles.items()
-        if name != REF
-    }
-
-
 def analyze(score: Score, prefix: str, timbre: Timbre, model: str, chord_labels: bool) -> str:
     profiles = profiles_for(score, timbre, model)
     desc = f"{model}, {timbre.n_partials} partials, rolloff {timbre.rolloff}"
 
-    fig, axes = plt.subplots(2, 1, figsize=(18, 9), sharex=True)
-    plot_profiles(profiles, ax=axes[0], title=f"{prefix}: roughness ({desc})", colors=COLORS)
-    plot_profiles(relative(profiles), ax=axes[1], chord_labels=chord_labels, colors=COLORS)
-    axes[1].axhline(1.0, color="k", linewidth=0.8)
-    axes[1].set_ylabel(f"roughness / {REF}")
+    title = f"{prefix}: roughness ({desc})"
+    fig = plot_comparison(profiles, REF, title, chord_labels, COLORS)
     save(fig, str(OUT / f"{prefix}_profiles.png"))
 
     report = [f"## {prefix}\n", f"Model: {desc}. Inter-note roughness, duration-weighted means.\n"]
