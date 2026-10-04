@@ -19,6 +19,6 @@ Before committing, run all of: `ruff format`, `ruff check`, `mypy`, `pytest`.
 - Write unit tests along with the code. Keep tests fast (short renders, low sample rates where possible).
 - Central representation is the resolved spectrum: per note and segment, arrays `freqs[k]`, `amps[k]`. Synthesizer and dissonance meter consume only that.
 - Score model: our own small dataclasses, time in seconds. `music21` only at generation/import time (Roman-numeral chords, key analysis, Bach chorales corpus); `pretty_midi` for MIDI I/O.
-- Dissonance uses the `dissonant` package (author's own, numpy-only) as the model reference.
+- Dissonance models live in `dissonance.py`, written against an array namespace (`xp`: numpy or torch) so the optimizer (`optimize.py`, PyTorch CPU) uses the same formulas. The `dissonant` package (author's own, numpy-only) is the reference in tests.
 - Nothing touches an audio device; everything renders offline to files.
 - Commit coherent pieces of work separately, with a descriptive message.

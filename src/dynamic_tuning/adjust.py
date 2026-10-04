@@ -11,6 +11,7 @@ parametrization.
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -50,6 +51,14 @@ class SpectrumParams:
             for note, c in zip(seg.notes, cents, strict=True):
                 result.setdefault(int(note), []).append((seg.start, float(c)))
         return result
+
+
+def held_note_jumps(spectrum: ResolvedSpectrum, params: SpectrumParams) -> np.ndarray:
+    """Absolute intonation changes (cents) of notes between adjacent segments."""
+    jumps = []
+    for track in params.note_cents(spectrum).values():
+        jumps += [abs(b[1] - a[1]) for a, b in itertools.pairwise(track)]
+    return np.array(jumps)
 
 
 def apply(spectrum: ResolvedSpectrum, params: SpectrumParams) -> ResolvedSpectrum:
