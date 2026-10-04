@@ -1,4 +1,4 @@
-"""M3: dissonance profiles of the progression (and a chorale) in each fixed tuning.
+"""M3: dissonance profiles of the progression and corpus pieces in each fixed tuning.
 
 Writes plots and markdown summaries to outputs/m3/.
 """
@@ -22,7 +22,7 @@ from dynamic_tuning.analysis import (
     save,
     summary_table,
 )
-from dynamic_tuning.chorales import load_chorale
+from dynamic_tuning.pieces import PIECES, load_corpus
 from dynamic_tuning.progression import key_cycle, progression_score
 from dynamic_tuning.score import Score, key_name
 from dynamic_tuning.spectrum import Timbre, resolve
@@ -41,10 +41,22 @@ def profiles_for(score: Score, timbre: Timbre, model: str) -> dict[str, Profile]
 
 
 def relative(profiles: dict[str, Profile]) -> dict[str, Profile]:
-    """Per-segment ratio to the reference tuning (segments are identical across tunings)."""
+    """Per-segment ratio to the reference tuning (segments are identical across tunings).
+
+    Segments with zero reference roughness (e.g. a single sounding note) get ratio 1.
+    """
     ref = profiles[REF].value
+    ones = np.ones_like(ref)
     return {
-        name: Profile(name, p.start, p.end, p.value / ref, p.chords, p.qualities, p.keys)
+        name: Profile(
+            name,
+            p.start,
+            p.end,
+            np.divide(p.value, ref, out=ones.copy(), where=ref > 0),
+            p.chords,
+            p.qualities,
+            p.keys,
+        )
         for name, p in profiles.items()
         if name != REF
     }
@@ -144,7 +156,7 @@ def main() -> None:
     parser.add_argument("--n-partials", type=int, default=8)
     parser.add_argument("--rolloff", type=float, default=1.0)
     parser.add_argument("--model", default="sethares1993")
-    parser.add_argument("--chorale", default="bach/bwv66.6")
+    parser.add_argument("--pieces", nargs="*", default=list(PIECES), help="music21 corpus names")
     parser.add_argument("--no-sensitivity", action="store_true")
     args = parser.parse_args()
 
@@ -157,10 +169,9 @@ def main() -> None:
     key_dependence(score, timbre, args.model)
     pair_heatmaps(score, timbre, args.model, "C: V7")
     pair_heatmaps(score, timbre, args.model, "C: I")
-    if args.chorale:
-        chorale = load_chorale(args.chorale)
-        name = args.chorale.split("/")[-1]
-        report.append(analyze(chorale, name, timbre, args.model, chord_labels=False))
+    for piece in args.pieces:
+        name = piece.split("/")[-1]
+        report.append(analyze(load_corpus(piece), name, timbre, args.model, chord_labels=False))
     if not args.no_sensitivity:
         report.append(sensitivity(score))
 

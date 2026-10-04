@@ -1,4 +1,4 @@
-"""Import of Bach chorales from the music21 corpus into our `Score`.
+"""Import of pieces from the music21 corpus (Bach chorales, WTC I prelude BWV 846) into `Score`.
 
 music21 is used only here (and in `progression`), the rest of the code works on `Score`.
 """
@@ -12,6 +12,9 @@ from music21.analysis import discrete, windowed
 
 from .score import Note, Score, Section, merge_sections
 
+# Pieces used in the experiments, with their default tempo (quarter notes per minute).
+PIECES: dict[str, float] = {"bach/bwv66.6": 80.0, "bach/bwv846": 72.0}
+
 
 def list_bach_works() -> list[str]:
     """Names of Bach works in the music21 corpus, e.g. "bach/bwv66.6".
@@ -21,24 +24,29 @@ def list_bach_works() -> list[str]:
     return sorted({f"bach/{Path(str(p)).stem}" for p in corpus.getComposer("bach")})
 
 
-def load_chorale(
+def load_corpus(
     name: str = "bach/bwv66.6",
-    tempo: float = 80.0,
+    tempo: float | None = None,
     key_window: int | None = 8,
     min_section_beats: float = 4.0,
 ) -> Score:
-    """Load a chorale; each part becomes a voice (0 = soprano, ..., 3 = bass).
+    """Load a piece from the corpus; each part becomes a voice (top part first).
+
+    E.g. "bach/bwv66.6" (chorale: 0 = soprano, ..., 3 = bass) or "bach/bwv846"
+    (C major prelude from WTC I, two staves, written-out sustain).
 
     Sections: if `key_window` is set (in quarter notes), keys are estimated by a sliding
     Krumhansl-Schmuckler window and short sections are merged into neighbors. Otherwise
-    the whole chorale is one section with the globally estimated key.
+    the whole piece is one section with the globally estimated key.
+    The tempo defaults to the one in `PIECES` (or 80).
     """
     s = corpus.parse(name)
     assert isinstance(s, stream.Score)
-    return chorale_to_score(s, tempo, key_window, min_section_beats)
+    tempo = tempo or PIECES.get(name, 80.0)
+    return corpus_to_score(s, tempo, key_window, min_section_beats)
 
 
-def chorale_to_score(
+def corpus_to_score(
     s: stream.Score,
     tempo: float = 80.0,
     key_window: int | None = 8,

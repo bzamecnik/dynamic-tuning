@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from dynamic_tuning.chorales import _keys_to_sections, list_bach_works, load_chorale
+from dynamic_tuning.pieces import _keys_to_sections, list_bach_works, load_corpus
 from dynamic_tuning.score import Section
 
 
@@ -25,10 +25,10 @@ def test_keys_to_sections_short_first() -> None:
 
 @pytest.fixture(scope="module")
 def chorale():
-    return load_chorale("bach/bwv66.6", tempo=60.0)
+    return load_corpus("bach/bwv66.6", tempo=60.0)
 
 
-def test_load_chorale(chorale) -> None:
+def test_load_corpus(chorale) -> None:
     assert chorale.voices == [0, 1, 2, 3]
     assert chorale.duration == pytest.approx(36.0)  # 36 quarter notes at 60 BPM
     assert all(n.duration > 0 for n in chorale.notes)
@@ -52,5 +52,14 @@ def test_chorale_sections_cover_the_piece(chorale) -> None:
 
 
 def test_chorale_single_key() -> None:
-    score = load_chorale("bach/bwv66.6", key_window=None)
+    score = load_corpus("bach/bwv66.6", key_window=None)
     assert [s.name for s in score.sections] == ["f#"]
+
+
+def test_load_prelude_bwv846() -> None:
+    score = load_corpus("bach/bwv846")
+    assert score.tempo == 72.0
+    assert len(score.voices) == 2
+    assert score.duration == pytest.approx(136 * 60 / 72)
+    assert score.sections[0].name == "C"
+    assert {s.name for s in score.sections} >= {"C", "G"}  # modulates to the dominant

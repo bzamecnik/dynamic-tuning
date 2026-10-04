@@ -41,3 +41,12 @@ one note don't depend on the tuning), duration-weighted means.
   partial pairs (beating as distinct from roughness).
 - Report results relative to 12-TET (per segment, as in the lower profile plot). Absolute
   values are dominated by voicing and register.
+
+## BWV 846 (WTC I, C major prelude, from the music21 corpus)
+
+- Estimated key sections: C → G → a → G → g → d → C → F → f → G (pedal) → C.
+- Same picture as for the progression: tunings differ by a few percent per segment.
+  The largest effect is fixed JI (C) in the A minor passage (up to +17 % vs 12-TET),
+  which comes from the syntonic comma (D–A). Key-relative JI is the smoothest overall.
+- The corpus edition writes the sustain out only for the lower voices (upper arpeggio
+  notes are 16ths), so roughness drops to zero between some chord tones.
