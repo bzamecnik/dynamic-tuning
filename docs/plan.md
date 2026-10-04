@@ -86,7 +86,8 @@ Revisit only when real-time is on the table.
 ```
 pyproject.toml
 src/dynamic_tuning/
-    score.py          # Note, Section, Score, MIDI I/O, music21 chorale import
+    score.py          # Note, Section, Score, MIDI I/O
+    chorales.py       # Bach chorales from the music21 corpus -> Score, key sections
     progression.py    # chord vocabulary, key cycle, voice-leading generator
     tuning.py         # fixed tunings: cents tables, key-relative lookup
     spectrum.py       # timbre models + ResolvedSpectrum (per note, per segment)
