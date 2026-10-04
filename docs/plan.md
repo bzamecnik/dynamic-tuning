@@ -8,9 +8,9 @@ Scope for now: symbolic input (generated scores + MIDI) → additive synthesis �
 
 ## Guiding decisions
 
-1. **Own the synthesizer.** Sample-based or SoundFont synths fix the partials, so they can't do dynamic timbre. Additive synthesis in numpy is about 50 lines and gives full control of every partial's frequency and amplitude. We don't need an external synth package, and nothing touches an audio device.
+1. **Own the synthesizer.** Sample-based or SoundFont synths fix the partials, so they can't do dynamic timbre. Additive synthesis in numpy gives full control of every partial's frequency and amplitude, and the output of the optimizer feeds it directly. The oscillator bank itself is a few lines, but the real work is in the details: phase continuity across segments (cumulative sum of instantaneous frequency), glides at segment boundaries, envelopes for notes spanning several segments, dropping partials above Nyquist, click-free note on/off, normalization, and rendering per note to keep memory bounded. Expect ~200–300 lines plus tests. We don't need an external synth package, and nothing touches an audio device.
 2. **One central representation: the resolved spectrum.** Everything (tuning, timbre, optimizer) just produces, per note and time segment, arrays `freqs[k]` and `amps[k]`. The synthesizer and the dissonance meter both consume only that. Because of this, fixed tunings, hand-made adjustments and optimizers all plug in the same way.
-3. **Score is in Python, MIDI is for interchange.** See "Symbolic representation".
+3. **Score is in Python, MIDI is for interchange.** Our own small data model is the runtime representation; music theory (chord spelling, key analysis, test corpus) comes from `music21`, used only at generation/import time. See "Symbolic representation".
 4. **Dissonance is measured on partials, not audio** (Sethares / Plomp–Levelt / Vassilakis on `(freq, amp)` pairs). It is cheap and differentiable. Later we can sanity-check it against an STFT of the rendered audio, but this isn't a goal.
 5. **Optimizer is built on autodiff**, so the dissonance model has to be re-implemented in PyTorch. The `dissonant` package is numpy-only: we use it directly for non-optimization tasks (e.g. the dissonance profile of a whole score) and as the reference to test the port against.
 
@@ -19,13 +19,18 @@ Scope for now: symbolic input (generated scores + MIDI) → additive synthesis �
 Recommendation: a small Python data model, with MIDI import/export. No new text format for now.
 
 ```
-Note:    start, duration (in beats or seconds), pitch (MIDI int), voice (int), velocity
+Note:    start, duration (seconds), pitch (MIDI int), voice (int), velocity
 Section: start, end, tonic (pitch class), mode   # key annotation, needed for per-key just intonation
 Score:   notes, sections, tempo
 ```
 
+- **Why our own model and not music21/partitura objects:** the optimizer and dissonance meter need flat numpy-friendly arrays, segment slicing and note identity across segments (parameters are indexed by (note, segment)). That is ~30 lines of dataclasses; library objects would make the hot path slower and more awkward.
+- **Time unit:** seconds internally (converted from the MIDI tempo map by `pretty_midi`). Beats can be kept as an extra attribute if needed.
+- **music21 at the edges:** chord vocabulary via Roman numerals (`RomanNumeral('ii7', key)` gives correctly spelled pitches incl. ø7, °7, V7♭9), key analysis (windowed `analyze('key')`), and the Bach chorales corpus as real-music test material. It is a heavy, slow-ish dependency, so we convert to our `Score` right after generation/import.
+
 - **Why not MIDI only:** MIDI has no spelling (G♯ vs A♭) and no clear notion of the current key. Key-relative tunings (just intonation, meantone) need the tonic. Spelling matters only for meantone-style tunings with split accidentals. For a 12-note tuning we pick one fixed spelling (e.g. E♭ B♭ F C G D A E B F♯ C♯ G♯ for 1/4-comma meantone), so MIDI pitch numbers are enough. The tonic goes into `Section`.
-- **MIDI I/O** via `mido` or `pretty_midi`. Key and section info is stored as MIDI marker/key-signature meta events. We can import `midi/well-tempered-clavier-i_bwv-846.mid` later as a real-music test, for which the key would be annotated by hand or detected from the MIDI.
+- **MIDI I/O** via `pretty_midi` (it handles key-signature, marker/text and pitch-bend events and converts times to seconds). Key and section info is stored as MIDI marker/key-signature meta events.
+- **Real-music test material:** Bach chorales from the music21 corpus (~370 SATB chorales, bundled with the package, so nothing to download or redistribute). They are strictly 4-voice, chordal and modulating, so a natural next step after the generated progression. Section keys come from the chorale's key signature plus windowed key analysis.
 - **Text format:** the progression generator is code, so a text format isn't needed yet. If we later want hand-written examples, we can add a minimal chord-per-line syntax such as `Cmaj7 | Am7 | Dm7 G7 | C`, which expands to voiced notes. This is not part of the first milestone.
 
 ## Test material: the 12-key cycling progression
@@ -48,7 +53,7 @@ Pattern for key K, one chord per bar or two:
 
 Possible extensions (a second, more dissonant pattern): sus4, add9, augmented, minor-major 7.
 
-Voicing: 4 voices (SATB-like, 5 for 9th chords), chosen by an automatic **minimal-motion voice-leading** search, within fixed voice ranges, so that voices move smoothly and the 12-key loop stays in one register. Voicing is generated once and saved as MIDI. This is deterministic, so every tuning renders identical notes.
+Chord pitches come from music21 Roman numerals in the given key. Voicing: 4 voices (SATB-like, 5 for 9th chords), chosen by an automatic **minimal-motion voice-leading** search (own code: enumerate voicings within ranges, then DP/Viterbi over the progression, since no maintained library does this), within fixed voice ranges, so that voices move smoothly and the 12-key loop stays in one register. Voicing is generated once and saved as MIDI. This is deterministic, so every tuning renders identical notes.
 
 The progression is a regression fixture: all later results are compared on it.
 
@@ -58,13 +63,21 @@ The progression is a regression fixture: all later results are compared on it.
 |---|---|---|
 | Arrays, synthesis | numpy, scipy | additive synthesis, ADSR envelopes |
 | WAV output | `soundfile` (or `scipy.io.wavfile`) | purely offline |
-| MIDI I/O | `mido` or `pretty_midi` | no audio backend needed |
+| MIDI I/O | `pretty_midi` | no audio backend needed; also writes pitch bends for tuned MIDI export |
+| Music theory, corpus | `music21` | generation/import only: Roman-numeral chords, key analysis, Bach chorales corpus |
 | Plots | matplotlib | |
 | Autodiff | PyTorch (CPU) | decided; JAX would be equivalent but PyTorch code is a bit easier to read |
 | Dissonance | `dissonant` (own package, PyPI) | used directly for non-optimization tasks (e.g. profile of a whole score); reimplemented in PyTorch for the loss |
 | Optional | `pedalboard` for reverb on final renders | |
 
-Alternatives for synthesis (Csound NRT, SuperCollider NRT, FluidSynth with MTS) work offline too, but add a second toolchain and don't give per-partial control that is as easy as numpy. Revisit only when real-time is on the table.
+Alternatives for synthesis considered and rejected:
+- FluidSynth / SoundFonts (+ MTS): partials fixed by samples, so tuning yes, timbre no.
+- Csound / SuperCollider NRT: capable, but a second language and toolchain driven via generated score files, with no gain offline.
+- pyo, DawDreamer (Faust): oriented to real time / plugin hosting; feeding per-sample partial trajectories from numpy is more awkward than computing them in numpy.
+- DDSP harmonic/sinusoidal synth: closest conceptually and differentiable, but TensorFlow and largely unmaintained; we don't need gradients through audio since the loss is on partials.
+- sms-tools `sineModelSynth`: frame-based IFFT synthesis tied to analysis frame rates; plain oscillators are simpler.
+
+Revisit only when real-time is on the table.
 
 **Environment (decided):** a `uv` project with `pyproject.toml`, on a recent Python supported by PyTorch (3.12 or 3.13). PyTorch is CPU-only (about 200 MB), as no GPU is needed.
 
@@ -73,7 +86,7 @@ Alternatives for synthesis (Csound NRT, SuperCollider NRT, FluidSynth with MTS) 
 ```
 pyproject.toml
 src/dynamic_tuning/
-    score.py          # Note, Section, Score, MIDI I/O
+    score.py          # Note, Section, Score, MIDI I/O, music21 chorale import
     progression.py    # chord vocabulary, key cycle, voice-leading generator
     tuning.py         # fixed tunings: cents tables, key-relative lookup
     spectrum.py       # timbre models + ResolvedSpectrum (per note, per segment)
@@ -97,7 +110,8 @@ Each milestone ends with something to look at or listen to.
 
 ### M1: Score + progression generator
 - `Score` model, MIDI export/import round trip.
-- Chord vocabulary, key cycle by fourths, voice-leading search.
+- Chord vocabulary on music21 Roman numerals, key cycle by fourths, own voice-leading search.
+- Bach chorale import from the music21 corpus into `Score` (with section keys).
 - **Deliverable:** `progression.mid` and a printed chord table; load it in any MIDI player to sanity check. Test: round trip, all 12 keys present, voice motion bounded.
 
 ### M2: Fixed tunings + additive synth → WAV
@@ -109,6 +123,7 @@ Each milestone ends with something to look at or listen to.
   - (cheap to add: Pythagorean, Werckmeister III)
 - Timbre: harmonic partials `k·f0`, amplitudes `1/k^α`, ADSR envelope. Parametrize `n_partials` and `α`.
 - Renderer takes a Score + Tuning + Timbre and writes WAV (mono first, optional stereo spread by voice).
+- Optional: tuned MIDI export (one channel per voice with pitch bend, MPE-style, or MTS) to audition tunings with realistic sampled instruments in any DAW. Timbre stays fixed there, but it is a cheap second perceptual check.
 - **Deliverable:** one WAV per tuning for the same progression. Test: frequency of each note matches the table (FFT peak check).
 
 ### M3: Dissonance measurement + visualization
@@ -141,8 +156,7 @@ Each milestone ends with something to look at or listen to.
 ### M6: Controlling the dissonance (stretch)
 - Target dissonance as a user parameter: global level (0 = minimum, 1 = base tuning), per chord class (keep dominant 7ths a bit tense), or an explicit curve over time.
 - Regularization sweeps: trade-off curve of dissonance vs deviation from base tuning.
-- Apply to real music: the Bach WTC prelude from `midi/`.
-  - Download from https://www.kunstderfuge.com/-/midi.asp?file=bach/sankey/well-tempered-clavier-i_bwv-846_(c)sankey.mid
+- Apply to real music: Bach chorales from the music21 corpus (a few in different keys, including modulating ones).
 
 ## Evaluation
 
